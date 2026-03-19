@@ -38,24 +38,8 @@ def log_interaction(username, role, content, intent=None):
         with JSON_PATH.open("a") as f:
             f.write(json.dumps(payload) + "\n")
 
-# --- Deterministic Greeting Detection ---
-def is_greeting(text):
-    greetings = {
-        "hi", "hello", "hey", "yo", "good morning",
-        "good afternoon", "good evening", "greetings", "sup"
-    }
-    # Strip out all punctuation so "Hi!" or "Hello." matches cleanly
-    text_clean = re.sub(r'[^\w\s]', '', text.lower()).strip()
-    
-    # ONLY return true if the entire message is just a greeting word
-    return text_clean in greetings
-
 # --- Intent Classification ---
 def verify_travel_topic(user_input, chat_history):
-    # HARD RULE: greetings handled without LLM
-    if is_greeting(user_input):
-        return "GREETING"
-
     context_str = "No prior context."
     if chat_history:
         recent_msgs = chat_history[-4:]
@@ -69,16 +53,20 @@ You are a strict classification system.
 Your ONLY output must be EXACTLY ONE WORD from this list: GREETING, TRAVEL, OTHER.
 Do not add punctuation. Do not add explanations. Do not use markdown.
 
-Rules:
-- If the user mentions a location, a trip, a vacation, or travel plans → TRAVEL
-- If the user answers a travel question from the assistant → TRAVEL
-- If the input is completely unrelated to travel or places → OTHER
+HIERARCHY & RULES:
+1. TRAVEL OVERRIDES GREETINGS: If the user says "Hi" but also mentions a location, a trip, or travel plans (e.g., "Hi I went to Miami"), you MUST classify it as TRAVEL.
+2. GREETING: ONLY use this if the input is *just* a basic hello (e.g., "Hi", "Hello") with NO other information.
+3. TRAVEL: Use this if the user mentions any place, vacation, or answers a previous travel question.
+4. OTHER: Use this if the input is completely unrelated to travel (e.g., asking for code, math, or random facts).
 
 EXAMPLES:
-User Input: "I went to Miami"
+User Input: "Hi"
+Output: GREETING
+
+User Input: "Hi I went to Miami"
 Output: TRAVEL
 
-User Input: "Hi I traveled to Paris"
+User Input: "I visited Miami"
 Output: TRAVEL
 
 User Input: "The beach was nice"
@@ -92,7 +80,7 @@ Context:
 """
 
     response = client.chat.completions.create(
-        model="gpt-5.4-mini",
+        model="gpt-4o-mini", # Switched to Lumi's stable classification model
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_input}
@@ -101,10 +89,14 @@ Context:
         max_completion_tokens=5
     )
 
-    intent = response.choices[0].message.content.strip().upper()
+    raw_output = response.choices[0].message.content.strip()
+    print(f"[DEBUG] Raw LLM Classifier Output: '{raw_output}'")
+
+    intent = raw_output.upper()
 
     # Safety fallback
     if intent not in ["GREETING", "TRAVEL", "OTHER"]:
+        print(f"[DEBUG] Invalid intent '{intent}' detected. Falling back to OTHER.")
         intent = "OTHER"
 
     return intent
@@ -134,7 +126,7 @@ Examples:
 """
 
     response = client.chat.completions.create(
-        model="gpt-5.4-nano",
+        model="gpt-5.4-nano", # Retained generator model per your directive
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_input}
@@ -165,7 +157,7 @@ def chat_step(user_message, username, persona, chat_history):
 
     intent = verify_travel_topic(msg, history)
 
-    print(f"[DEBUG] Input: {msg} → Intent: {intent}")
+    print(f"[DEBUG] Input: {msg} → Final Intent: {intent}")
 
     history.append({"role": "user", "content": msg})
     log_interaction(clean_name, "user", msg)
@@ -241,4 +233,4 @@ with gr.Blocks(theme=custom_theme) as demo:
     reset.click(lambda: ([], []), None, [chatbot, state])
 
 if __name__ == "__main__":
-        demo.launch()
+    demo.launch()
