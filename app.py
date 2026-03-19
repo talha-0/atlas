@@ -66,7 +66,7 @@ def verify_travel_topic(user_input, chat_history):
             {"role": "user", "content": f"<user_input>{user_input}</user_input>"}
         ],
         temperature=0.0,
-        max_tokens=5
+        max_completion_tokens=5 # FIXED: Updated to modern API schema
     )
     return response.choices[0].message.content.strip()
 
@@ -95,13 +95,12 @@ def generate_facilitator_response(user_input, persona, username):
             {"role": "user", "content": f"<user_input>{user_input}</user_input>"}
         ],
         temperature=0.7,
-        max_tokens=40
+        max_completion_tokens=100 # FIXED: Updated to modern API schema
     )
     return response.choices[0].message.content.strip()
 
 # --- Gradio UI & Routing ---
 def chat_step(user_message, username, persona, chat_history):
-    # CRITICAL FIX: Create a completely new list to force Svelte reactivity (Autoscroll)
     history = list(chat_history) if chat_history else []
     msg = user_message.strip()
     
@@ -109,7 +108,6 @@ def chat_step(user_message, username, persona, chat_history):
         return history, history, ""
 
     if not username or not username.strip():
-        # Assign new list with appended message
         history = history + [{"role": "user", "content": msg}]
         sys_msg = "Error: Identity required. Please enter your Identification in the configuration panel above."
         history = history + [{"role": "assistant", "content": sys_msg}]
@@ -121,7 +119,6 @@ def chat_step(user_message, username, persona, chat_history):
 
     intent = verify_travel_topic(msg, history)
 
-    # Append user message via list addition
     history = history + [{"role": "user", "content": msg}]
     log_interaction(clean_name, "user", msg)
 
@@ -162,23 +159,26 @@ custom_theme = gr.themes.Soft(
     font=[gr.themes.GoogleFont("Inter"), "sans-serif"]
 )
 
-with gr.Blocks(theme=custom_theme) as demo:
+# Removed theme from Blocks constructor
+with gr.Blocks() as demo:
     gr.Markdown("<h1 style='text-align: center; font-weight: 300; margin-bottom: 0;'>Atlas</h1>")
     gr.Markdown("<p style='text-align: center; color: gray; margin-top: 0;'>I am here to listen. Share your travel experiences.</p>")
     
-    with gr.Accordion("⚙️ Configuration", open=True):
+    # CLOSED by default to save vertical space
+    with gr.Accordion("⚙️ Configuration", open=False):
         with gr.Row():
             name_input = gr.Textbox(label="Identification", placeholder="Enter your name to begin...", scale=2)
             persona_selector = gr.Radio(["Empathetic", "Robotic"], label="Persona", value="Empathetic", scale=1)
     
-    # Unconstrained chatbot for native scrolling
-    chatbot = gr.Chatbot(show_label=False)
+    # Locked height to prevent vertical page scrolling
+    chatbot = gr.Chatbot(show_label=False, height=400)
     
     with gr.Row(equal_height=True):
         msg = gr.Textbox(placeholder="I visited Miami last week...", show_label=False, scale=8, container=False)
         send = gr.Button("Send", variant="primary", scale=1)
         
-    reset_btn = gr.Button("Wipe Memory", size="sm", variant="secondary")
+    # Removed size="sm" so the button is thicker and easier to hit
+    reset_btn = gr.Button("Wipe Memory", variant="secondary")
     
     state_history = gr.State([])
 
@@ -199,4 +199,5 @@ with gr.Blocks(theme=custom_theme) as demo:
     )
 
 if __name__ == "__main__":
-    demo.launch()
+    # Moved theme injection to launch()
+    demo.launch(theme=custom_theme)
