@@ -42,7 +42,7 @@ def log_interaction(username, role, content, intent=None):
 def verify_travel_topic(user_input, chat_history):
     context_str = "No prior context."
     if chat_history:
-        recent_msgs = chat_history[-4:]
+        recent_msgs = chat_history[-7:] # Expanded to 7 messages
         context_str = "\n".join(
             [f"{msg['role'].capitalize()}: {msg['content']}" for msg in recent_msgs]
         )
@@ -54,34 +54,17 @@ Your ONLY output must be EXACTLY ONE WORD from this list: GREETING, TRAVEL, OTHE
 Do not add punctuation. Do not add explanations. Do not use markdown.
 
 HIERARCHY & RULES:
-1. TRAVEL OVERRIDES GREETINGS: If the user says "Hi" but also mentions a location, a trip, or travel plans (e.g., "Hi I went to Miami"), you MUST classify it as TRAVEL.
-2. GREETING: ONLY use this if the input is *just* a basic hello (e.g., "Hi", "Hello") with NO other information.
-3. TRAVEL: Use this if the user mentions any place, vacation, OR if they are answering the assistant's previous travel question. Short conversational fragments (e.g., "The sun", "food", "relaxing") MUST be classified as TRAVEL if they logically answer the previous question in the Context.
+1. TRAVEL OVERRIDES GREETINGS: If the user says "Hi" but also mentions a location, a trip, or travel plans, you MUST classify it as TRAVEL.
+2. GREETING: ONLY use this if the input is *just* a basic hello with NO other information.
+3. TRAVEL: Use this if the user mentions any place, vacation, OR if they are answering the assistant's previous travel question. Single words or fragments (e.g., "The sun", "Beach", "Food") MUST be classified as TRAVEL if the context shows they are discussing a trip.
 4. OTHER: Use this if the input is completely unrelated to travel (e.g., asking for code, math, or random facts).
-
-EXAMPLES:
-User Input: "Hi"
-Output: GREETING
-
-User Input: "Hi I went to Miami"
-Output: TRAVEL
-
-User Input: "The beach was nice"
-Output: TRAVEL
-
-Context: Assistant: "What did you enjoy most at South Beach?"
-User Input: "The sun"
-Output: TRAVEL
-
-User Input: "Can you write some code?"
-Output: OTHER
 
 Context:
 {context_str}
 """
 
     response = client.chat.completions.create(
-        model="gpt-4o-mini", # Switched to Lumi's stable classification model
+        model="gpt-4o-mini", 
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_input}
@@ -103,9 +86,16 @@ Context:
     return intent
 
 # --- Response Generator ---
-def generate_facilitator_response(user_input, persona, username):
+def generate_facilitator_response(user_input, persona, username, chat_history):
+    context_str = "No prior context."
+    if chat_history:
+        recent_msgs = chat_history[-7:] # Expanded to 7 messages
+        context_str = "\n".join(
+            [f"{msg['role'].capitalize()}: {msg['content']}" for msg in recent_msgs]
+        )
+
     if persona == "Empathetic":
-        tone = "You are a warm, curious listener."
+        tone = "You are a warm, curious listener. Speak naturally."
     else:
         tone = "You are a neutral, monotone listener."
 
@@ -114,20 +104,20 @@ def generate_facilitator_response(user_input, persona, username):
 
 You are Atlas. User: {username}
 
-RULES:
-- Ask ONLY travel-related questions
-- ONE sentence only (max 15 words)
-- NO filler
-- NO advice
-- NO repeating user input
+Recent Conversation Context:
+{context_str}
 
-Examples:
-"What was your favorite place there?"
-"What did you enjoy most during that trip?"
+RULES:
+1. BE CONTEXT AWARE: Look at the context. Do not ask questions the user has already answered. Connect your new question to the specific details they just provided.
+2. NATURAL PROGRESSION: If they give a short answer (like "the sun" or "the beach"), ask a logical follow-up about that specific thing.
+3. ONE SENTENCE ONLY: Maximum 15 words.
+4. NO FILLER: Do not say "That sounds great" or "I see."
+5. NO PARROTING: Do not just repeat what they said.
+6. NO ADVICE OR FACTS: Just ask the next question to keep them talking about their experience.
 """
 
     response = client.chat.completions.create(
-        model="gpt-5.4-nano", # Retained generator model per your directive
+        model="gpt-5.4-nano", 
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_input}
@@ -150,7 +140,7 @@ def chat_step(user_message, username, persona, chat_history):
         history.append({"role": "user", "content": msg})
         history.append({
             "role": "assistant",
-            "content": "Error: Please enter your name in configuration."
+            "content": "Error: Please enter your Identification in the configuration panel above."
         })
         return history, history, ""
 
@@ -177,7 +167,7 @@ def chat_step(user_message, username, persona, chat_history):
                 reply = f"Travel topics only, {clean_name}."
 
         elif intent == "TRAVEL":
-            reply = generate_facilitator_response(msg, persona, clean_name)
+            reply = generate_facilitator_response(msg, persona, clean_name, history)
 
         history.append({"role": "assistant", "content": reply})
         log_interaction(clean_name, "assistant", reply, intent=intent)
