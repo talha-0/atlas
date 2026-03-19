@@ -90,7 +90,8 @@ def verify_travel_topic(user_input, chat_history):
     )
     return response.choices[0].message.content.strip()
 
-def generate_facilitator_response(user_input, persona):
+def generate_facilitator_response(user_input, persona, username):
+    """The Mirror: Now aware of the user's name and its own identity (Atlas)."""
     if persona == "Empathetic":
         tone_instructions = "You are extremely warm, highly empathetic, and genuinely excited for the user. Speak like a close friend."
     else:
@@ -98,13 +99,14 @@ def generate_facilitator_response(user_input, persona):
 
     system_prompt = f"""
     {tone_instructions}
-    You are a dedicated listener. The user is sharing a travel experience.
+    You are Atlas, a dedicated listener. The user's name is {username}. They are sharing a travel experience.
     
     YOUR STRICT RULES:
     1. You MUST NOT provide any outside information, facts, recommendations, or tips.
-    2. You MUST NOT change the topic or talk about yourself.
-    3. ACTIVE LISTENING: You MUST explicitly mention a specific detail the user just shared to prove you are listening, and then encourage them to continue. 
+    2. You MUST NOT change the topic or talk about yourself, other than introducing yourself as Atlas if asked.
+    3. ACTIVE LISTENING: You MUST explicitly mention a specific detail {username} just shared to prove you are listening, and then encourage them to continue. 
     4. Keep it concise (1 to 2 sentences max).
+    5. Occasionally use the user's name to make it feel personal.
     """
     
     response = client.chat.completions.create(
@@ -120,7 +122,6 @@ def generate_facilitator_response(user_input, persona):
 
 # --- Gradio UI & Routing ---
 def chat_step(user_message, username, persona, chat_history):
-    # Reverting to the Lumi architecture pattern for state
     history = chat_history or []
     msg = user_message.strip()
     
@@ -133,26 +134,37 @@ def chat_step(user_message, username, persona, chat_history):
         history.append({"role": "assistant", "content": sys_msg})
         return history, history, ""
 
+    # Clean the username for personalized messages
+    clean_name = username.strip()
+
     intent = verify_travel_topic(msg, history)
 
     history.append({"role": "user", "content": msg})
-    log_interaction(username, "user", msg)
+    log_interaction(clean_name, "user", msg)
 
     try:
         if intent == "GREETING":
-            sys_msg = "Hello. I am here to listen. Tell me about your travels."
+            if persona == "Empathetic":
+                sys_msg = f"Hello {clean_name}, I am Atlas. It's wonderful to meet you. Please, tell me about your travels."
+            else:
+                sys_msg = f"User {clean_name} recognized. Designation: Atlas. Awaiting travel itinerary or experience logs."
+            
             history.append({"role": "assistant", "content": sys_msg})
-            log_interaction(username, "assistant", sys_msg, intent="GREETING")
+            log_interaction(clean_name, "assistant", sys_msg, intent="GREETING")
             
         elif intent == "OTHER":
-            sys_msg = "I am only authorized to listen to travel experiences. Please return to the topic of travel."
+            if persona == "Empathetic":
+                sys_msg = f"I'm sorry {clean_name}, but I am only able to listen to travel experiences. Could we go back to talking about your trips?"
+            else:
+                sys_msg = f"Topic violation detected, {clean_name}. I am strictly authorized for travel experiences only. Revert to approved topic."
+                
             history.append({"role": "assistant", "content": sys_msg})
-            log_interaction(username, "assistant", sys_msg, intent="OTHER")
+            log_interaction(clean_name, "assistant", sys_msg, intent="OTHER")
             
         else: # TRAVEL
-            response = generate_facilitator_response(msg, persona)
+            response = generate_facilitator_response(msg, persona, clean_name)
             history.append({"role": "assistant", "content": response})
-            log_interaction(username, "assistant", response, intent="TRAVEL")
+            log_interaction(clean_name, "assistant", response, intent="TRAVEL")
             
     except Exception as e:
         err_msg = f"System fault: The connection to the cognitive engine failed. Please try again. ({str(e)})"
@@ -161,14 +173,13 @@ def chat_step(user_message, username, persona, chat_history):
     return history, history, ""
 
 with gr.Blocks() as demo:
-    gr.Markdown("# The Listening Terminal")
-    gr.Markdown("Share your travel experiences. We only listen.")
+    gr.Markdown("## Atlas")
+    gr.Markdown("Share your travel experiences. I am here to listen.")
     
     with gr.Row():
         name_input = gr.Textbox(label="Traveler Identification", placeholder="Who are you?", scale=1)
         persona_selector = gr.Radio(["Empathetic", "Robotic"], label="Select Listener Persona", value="Empathetic", scale=2)
     
-    # Lumi architecture: No height locks, no autoscroll flags
     chatbot = gr.Chatbot()
     
     with gr.Row():
@@ -181,7 +192,6 @@ with gr.Blocks() as demo:
     
     state_history = gr.State([])
 
-    # Lumi architecture: Input array explicitly ordered to match chat_step signature
     send.click(
         chat_step, 
         inputs=[msg, name_input, persona_selector, state_history], 
