@@ -45,7 +45,7 @@ def verify_travel_topic(user_input):
     If it is about any other topic, respond ONLY with 'FAIL'.
     """
     response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model="gpt-5.4-nano",
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_input}
@@ -73,13 +73,13 @@ def generate_facilitator_response(user_input, persona):
     Examples: "Tell me more.", "What did you see?", "That sounds interesting, please continue."
     """
     response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model="gpt-5.4-nano",
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_input}
         ],
         temperature=0.7,
-        max_tokens=20
+        max_tokens=100
     )
     return response.choices[0].message.content.strip()
 
