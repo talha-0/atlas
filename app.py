@@ -56,7 +56,7 @@ Do not add punctuation. Do not add explanations. Do not use markdown.
 HIERARCHY & RULES:
 1. TRAVEL OVERRIDES GREETINGS: If the user says "Hi" but also mentions a location, a trip, or travel plans (e.g., "Hi I went to Miami"), you MUST classify it as TRAVEL.
 2. GREETING: ONLY use this if the input is *just* a basic hello (e.g., "Hi", "Hello") with NO other information.
-3. TRAVEL: Use this if the user mentions any place, vacation, or answers a previous travel question.
+3. TRAVEL: Use this if the user mentions any place, vacation, OR if they are answering the assistant's previous travel question. Short conversational fragments (e.g., "The sun", "food", "relaxing") MUST be classified as TRAVEL if they logically answer the previous question in the Context.
 4. OTHER: Use this if the input is completely unrelated to travel (e.g., asking for code, math, or random facts).
 
 EXAMPLES:
@@ -66,10 +66,11 @@ Output: GREETING
 User Input: "Hi I went to Miami"
 Output: TRAVEL
 
-User Input: "I visited Miami"
+User Input: "The beach was nice"
 Output: TRAVEL
 
-User Input: "The beach was nice"
+Context: Assistant: "What did you enjoy most at South Beach?"
+User Input: "The sun"
 Output: TRAVEL
 
 User Input: "Can you write some code?"
