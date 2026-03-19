@@ -192,7 +192,7 @@ RULES:
 """
 
     response = client.chat.completions.create(
-        model="GPT-4.1",
+        model="gpt-4.1",
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": wrap_user_input(user_input)}
