@@ -1,8 +1,8 @@
 ---
-title: Travel Void
-emoji: 🐠
+title: Atlas
+emoji: 🌍
 colorFrom: gray
-colorTo: pink
+colorTo: blue
 sdk: gradio
 sdk_version: 6.9.0
 app_file: app.py
