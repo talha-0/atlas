@@ -62,9 +62,6 @@ def flag_last_interaction(username, chat_history):
 
 # --- Agent Logic ---
 def verify_travel_topic(user_input, chat_history):
-    """The Bouncer: Now possesses a localized memory buffer to understand context."""
-    
-    # Extract the last 4 messages to establish narrative context
     context_str = "No prior context."
     if chat_history:
         recent_msgs = chat_history[-4:]
@@ -94,7 +91,6 @@ def verify_travel_topic(user_input, chat_history):
     return response.choices[0].message.content.strip()
 
 def generate_facilitator_response(user_input, persona):
-    """The Mirror: Upgraded with Active Listening."""
     if persona == "Empathetic":
         tone_instructions = "You are extremely warm, highly empathetic, and genuinely excited for the user. Speak like a close friend."
     else:
@@ -109,9 +105,6 @@ def generate_facilitator_response(user_input, persona):
     2. You MUST NOT change the topic or talk about yourself.
     3. ACTIVE LISTENING: You MUST explicitly mention a specific detail the user just shared to prove you are listening, and then encourage them to continue. 
     4. Keep it concise (1 to 2 sentences max).
-    
-    Good Examples (Empathetic): "Tanning at South Beach sounds incredibly relaxing! What else did you do there?", "Miami is so vibrant. Tell me more about your trip!"
-    Good Examples (Robotic): "Destination Miami logged. Proceed with further details regarding South Beach.", "Tanning activity recorded. What occurred next?"
     """
     
     response = client.chat.completions.create(
@@ -126,29 +119,26 @@ def generate_facilitator_response(user_input, persona):
     return response.choices[0].message.content.strip()
 
 # --- Gradio UI & Routing ---
-def chat_step(username, user_message, persona, chat_history):
-    history = chat_history.copy() if chat_history else []
+def chat_step(user_message, username, persona, chat_history):
+    # Reverting to the Lumi architecture pattern for state
+    history = chat_history or []
+    msg = user_message.strip()
     
-    if not user_message.strip():
+    if not msg:
         return history, history, ""
 
-    # Check Bouncer BEFORE appending the new message to history so the LLM clearly sees what is past vs present
-    is_valid_identity = bool(username.strip())
-    
-    if not is_valid_identity:
-        history.append({"role": "user", "content": user_message})
+    if not username or not username.strip():
+        history.append({"role": "user", "content": msg})
         sys_msg = "Error: Identity required. Please enter your Traveler Identification in the box above before speaking."
         history.append({"role": "assistant", "content": sys_msg})
         return history, history, ""
 
+    intent = verify_travel_topic(msg, history)
+
+    history.append({"role": "user", "content": msg})
+    log_interaction(username, "user", msg)
+
     try:
-        # Pass the current history for context
-        intent = verify_travel_topic(user_message, history)
-
-        # Now append the user message
-        history.append({"role": "user", "content": user_message})
-        log_interaction(username, "user", user_message)
-
         if intent == "GREETING":
             sys_msg = "Hello. I am here to listen. Tell me about your travels."
             history.append({"role": "assistant", "content": sys_msg})
@@ -160,12 +150,11 @@ def chat_step(username, user_message, persona, chat_history):
             log_interaction(username, "assistant", sys_msg, intent="OTHER")
             
         else: # TRAVEL
-            response = generate_facilitator_response(user_message, persona)
+            response = generate_facilitator_response(msg, persona)
             history.append({"role": "assistant", "content": response})
             log_interaction(username, "assistant", response, intent="TRAVEL")
             
     except Exception as e:
-        history.append({"role": "user", "content": user_message})
         err_msg = f"System fault: The connection to the cognitive engine failed. Please try again. ({str(e)})"
         history.append({"role": "assistant", "content": err_msg})
 
@@ -179,7 +168,8 @@ with gr.Blocks() as demo:
         name_input = gr.Textbox(label="Traveler Identification", placeholder="Who are you?", scale=1)
         persona_selector = gr.Radio(["Empathetic", "Robotic"], label="Select Listener Persona", value="Empathetic", scale=2)
     
-    chatbot = gr.Chatbot(height=500, autoscroll=True)
+    # Lumi architecture: No height locks, no autoscroll flags
+    chatbot = gr.Chatbot()
     
     with gr.Row():
         msg = gr.Textbox(placeholder="I visited Hong Kong last week...", show_label=False, scale=8)
@@ -191,8 +181,17 @@ with gr.Blocks() as demo:
     
     state_history = gr.State([])
 
-    send.click(chat_step, inputs=[name_input, msg, persona_selector, state_history], outputs=[chatbot, state_history, msg], scroll_to_output=True)
-    msg.submit(chat_step, inputs=[name_input, msg, persona_selector, state_history], outputs=[chatbot, state_history, msg], scroll_to_output=True)
+    # Lumi architecture: Input array explicitly ordered to match chat_step signature
+    send.click(
+        chat_step, 
+        inputs=[msg, name_input, persona_selector, state_history], 
+        outputs=[chatbot, state_history, msg]
+    )
+    msg.submit(
+        chat_step, 
+        inputs=[msg, name_input, persona_selector, state_history], 
+        outputs=[chatbot, state_history, msg]
+    )
     
     flag_btn.click(flag_last_interaction, inputs=[name_input, state_history], outputs=[])
     clear.click(lambda: ([], []), None, [chatbot, state_history])
