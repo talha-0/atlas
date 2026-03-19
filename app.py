@@ -172,7 +172,7 @@ with gr.Blocks() as demo:
     gr.Markdown("<h1 style='text-align: center; font-weight: 300; margin-bottom: 0;'>Atlas</h1>")
     gr.Markdown("<p style='text-align: center; color: gray; margin-top: 0;'>I am here to listen. Share your travel experiences.</p>")
     
-    with gr.Accordion("⚙️ Configuration", open=False):
+    with gr.Accordion("⚙️ Configuration", open=True):
         name_input = gr.Textbox(label="Identification", placeholder="Enter your name to begin...")
         persona_selector = gr.Radio(["Empathetic", "Robotic"], label="Persona", value="Empathetic")
     
