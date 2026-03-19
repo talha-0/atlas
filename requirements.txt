@@ -1,0 +1,6 @@
+openai
+fastapi[standard]
+pydantic
+python-dotenv
+gradio
+huggingface_hub
