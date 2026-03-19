@@ -40,12 +40,15 @@ def log_interaction(username, role, content, intent=None):
 
 # --- Deterministic Greeting Detection ---
 def is_greeting(text):
-    greetings = [
+    greetings = {
         "hi", "hello", "hey", "yo", "good morning",
-        "good afternoon", "good evening"
-    ]
-    text_clean = text.lower().strip()
-    return any(text_clean == g or text_clean.startswith(g + " ") for g in greetings)
+        "good afternoon", "good evening", "greetings", "sup"
+    }
+    # Strip out all punctuation so "Hi!" or "Hello." matches cleanly
+    text_clean = re.sub(r'[^\w\s]', '', text.lower()).strip()
+    
+    # ONLY return true if the entire message is just a greeting word
+    return text_clean in greetings
 
 # --- Intent Classification ---
 def verify_travel_topic(user_input, chat_history):
@@ -63,8 +66,8 @@ def verify_travel_topic(user_input, chat_history):
     system_prompt = f"""
 You are a strict classification system.
 
-Return EXACTLY ONE WORD:
-GREETING, TRAVEL, or OTHER.
+Your ONLY output must be EXACTLY ONE WORD from this list: GREETING, TRAVEL, OTHER.
+Do not add punctuation. Do not add explanations. Do not use markdown.
 
 Rules:
 - If user shares travel OR answers a travel question → TRAVEL
@@ -157,9 +160,9 @@ def chat_step(user_message, username, persona, chat_history):
     try:
         if intent == "GREETING":
             if persona == "Empathetic":
-                reply = f"Hello {clean_name}, tell me about a recent trip."
+                reply = f"Hello {clean_name}, I am Atlas, your dedicated travel listener. Where did your most recent journey take you?"
             else:
-                reply = f"Hello {clean_name}. Share a travel experience."
+                reply = f"User {clean_name} recognized. I am Atlas. Awaiting input regarding your travel experiences."
 
         elif intent == "OTHER":
             if persona == "Empathetic":
@@ -182,22 +185,31 @@ def chat_step(user_message, username, persona, chat_history):
     return history, history, ""
 
 # --- UI ---
-with gr.Blocks() as demo:
-    gr.Markdown("# Atlas")
-    gr.Markdown("Share your travel experiences.")
+custom_theme = gr.themes.Soft(
+    spacing_size="sm", 
+    radius_size="md",
+    font=[gr.themes.GoogleFont("Inter"), "sans-serif"]
+)
 
-    with gr.Accordion("Configuration", open=True):
-        name_input = gr.Textbox(label="Name")
+with gr.Blocks(theme=custom_theme) as demo:
+    gr.Markdown("<h1 style='text-align: center; font-weight: 300; margin-bottom: 0;'>Atlas</h1>")
+    gr.Markdown("<p style='text-align: center; color: gray; margin-top: 0;'>I am here to listen. Share your travel experiences.</p>")
+
+    with gr.Accordion("⚙️ Configuration", open=False):
+        name_input = gr.Textbox(label="Identification", placeholder="Enter your name to begin...")
         persona_selector = gr.Radio(
             ["Empathetic", "Robotic"],
             value="Empathetic",
             label="Persona"
         )
 
-    chatbot = gr.Chatbot()
-    msg = gr.Textbox(placeholder="I visited Miami...")
-    send = gr.Button("Send")
-    reset = gr.Button("Reset")
+    chatbot = gr.Chatbot(show_label=False)
+    
+    msg = gr.Textbox(placeholder="I visited Miami...", show_label=False)
+    
+    with gr.Row():
+        send = gr.Button("Send", variant="primary")
+        reset = gr.Button("Wipe Memory", variant="secondary")
 
     state = gr.State([])
 
