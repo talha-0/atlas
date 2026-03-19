@@ -65,13 +65,13 @@ def verify_travel_topic(user_input, chat_history):
     """
     
     response = client.chat.completions.create(
-        model="gpt-5.4-nano",
+        model="gpt-5.4-mini",
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"<user_input>{user_input}</user_input>"}
         ],
         temperature=0.0,
-        max_completion_tokens=5
+        max_completion_tokens=20
     )
     return response.choices[0].message.content.strip()
 
