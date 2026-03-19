@@ -70,9 +70,22 @@ Your ONLY output must be EXACTLY ONE WORD from this list: GREETING, TRAVEL, OTHE
 Do not add punctuation. Do not add explanations. Do not use markdown.
 
 Rules:
-- If user shares travel OR answers a travel question → TRAVEL
-- If unrelated → OTHER
-- NEVER output anything else
+- If the user mentions a location, a trip, a vacation, or travel plans → TRAVEL
+- If the user answers a travel question from the assistant → TRAVEL
+- If the input is completely unrelated to travel or places → OTHER
+
+EXAMPLES:
+User Input: "I went to Miami"
+Output: TRAVEL
+
+User Input: "Hi I traveled to Paris"
+Output: TRAVEL
+
+User Input: "The beach was nice"
+Output: TRAVEL
+
+User Input: "Can you write some code?"
+Output: OTHER
 
 Context:
 {context_str}
@@ -228,4 +241,4 @@ with gr.Blocks(theme=custom_theme) as demo:
     reset.click(lambda: ([], []), None, [chatbot, state])
 
 if __name__ == "__main__":
-    demo.launch()
+        demo.launch()
