@@ -23,25 +23,43 @@ scheduler = CommitScheduler(
     token=os.getenv("HF_TOKEN")
 )
 
-def log_interaction(username, role, content):
+def log_interaction(username, role, content, intent=None):
+    payload = {
+        "user": username,
+        "role": role,
+        "content": content,
+        "timestamp": datetime.utcnow().isoformat()
+    }
+    if intent:
+        payload["intent"] = intent
+
+    with scheduler.lock:
+        with JSON_PATH.open("a") as f:
+            f.write(json.dumps(payload) + "\n")
+
+def flag_last_interaction(username, chat_history):
+    """The Surveillance Camera: Logs a manual flag to the dataset."""
+    if not username.strip():
+        raise gr.Error("Identity required to submit a flag.")
+        
+    if not chat_history or len(chat_history) < 2:
+        gr.Info("There is nothing to flag yet.")
+        return
+
+    last_user_msg = chat_history[-2]["content"]
+    last_bot_msg = chat_history[-1]["content"]
+    
     with scheduler.lock:
         with JSON_PATH.open("a") as f:
             f.write(json.dumps({
                 "user": username,
-                "role": role,
-                "content": content,
+                "action": "FLAGGED_MISCLASSIFICATION",
+                "flagged_user_input": last_user_msg,
+                "flagged_bot_response": last_bot_msg,
                 "timestamp": datetime.utcnow().isoformat()
             }) + "\n")
-
-# --- Helper ---
-def format_ui_history(history):
-    """Reconstructs the visual UI tuple format safely."""
-    ui_history = []
-    for i in range(0, len(history), 2):
-        u_msg = history[i]["content"]
-        a_msg = history[i+1]["content"] if i + 1 < len(history) else None
-        ui_history.append([u_msg, a_msg])
-    return ui_history
+    
+    gr.Info("Misclassification flagged and permanently logged to the vault.")
 
 # --- Agent Logic ---
 def verify_travel_topic(user_input):
@@ -53,7 +71,7 @@ def verify_travel_topic(user_input):
     3. If it is about ANY other topic, respond ONLY with 'OTHER'.
     """
     response = client.chat.completions.create(
-        model="gpt-5.4-nano",
+        model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_input}
@@ -80,7 +98,7 @@ def generate_facilitator_response(user_input, persona):
     Examples: "Tell me more.", "What did you see?", "That sounds interesting, please continue."
     """
     response = client.chat.completions.create(
-        model="gpt-5.4-nano",
+        model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_input}
@@ -96,7 +114,7 @@ def chat_step(username, user_message, persona, chat_history):
     
     # Safely handle empty messages without crashing
     if not user_message.strip():
-        return format_ui_history(history), history, ""
+        return history, history, ""
 
     history.append({"role": "user", "content": user_message})
 
@@ -104,7 +122,7 @@ def chat_step(username, user_message, persona, chat_history):
     if not username.strip():
         sys_msg = "Error: Identity required. Please enter your Traveler Identification in the box above before speaking."
         history.append({"role": "assistant", "content": sys_msg})
-        return format_ui_history(history), history, ""
+        return history, history, ""
 
     log_interaction(username, "user", user_message)
 
@@ -115,26 +133,27 @@ def chat_step(username, user_message, persona, chat_history):
         if intent == "GREETING":
             sys_msg = "Hello. I am here to listen. Tell me about your travels."
             history.append({"role": "assistant", "content": sys_msg})
-            log_interaction(username, "assistant", sys_msg)
+            log_interaction(username, "assistant", sys_msg, intent="GREETING")
             
         elif intent == "OTHER":
             sys_msg = "I am only authorized to listen to travel experiences. Please return to the topic of travel."
             history.append({"role": "assistant", "content": sys_msg})
-            log_interaction(username, "assistant", sys_msg)
+            log_interaction(username, "assistant", sys_msg, intent="OTHER")
             
         else: # TRAVEL
             response = generate_facilitator_response(user_message, persona)
             history.append({"role": "assistant", "content": response})
-            log_interaction(username, "assistant", response)
+            log_interaction(username, "assistant", response, intent="TRAVEL")
             
     except Exception as e:
         # Graceful API Failure Handling
         err_msg = f"System fault: The connection to the cognitive engine failed. Please try again. ({str(e)})"
         history.append({"role": "assistant", "content": err_msg})
 
-    return format_ui_history(history), history, ""
+    return history, history, ""
 
-with gr.Blocks(theme=gr.themes.Monochrome()) as demo:
+# Moved the theme parameter to demo.launch() to fix the Gradio 6.0 warning
+with gr.Blocks() as demo:
     gr.Markdown("# The Listening Terminal")
     gr.Markdown("Share your travel experiences. We only listen.")
     
@@ -148,14 +167,17 @@ with gr.Blocks(theme=gr.themes.Monochrome()) as demo:
         msg = gr.Textbox(placeholder="I visited Hong Kong last week...", show_label=False, scale=8)
         send = gr.Button("Submit", scale=1)
         
-    clear = gr.Button("Wipe Memory")
+    with gr.Row():
+        flag_btn = gr.Button("⚠️ Report Misclassification", variant="secondary")
+        clear = gr.Button("Wipe Memory")
     
     state_history = gr.State([])
 
     send.click(chat_step, inputs=[name_input, msg, persona_selector, state_history], outputs=[chatbot, state_history, msg])
     msg.submit(chat_step, inputs=[name_input, msg, persona_selector, state_history], outputs=[chatbot, state_history, msg])
     
+    flag_btn.click(flag_last_interaction, inputs=[name_input, state_history], outputs=[])
     clear.click(lambda: ([], []), None, [chatbot, state_history])
 
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(theme=gr.themes.Monochrome())
