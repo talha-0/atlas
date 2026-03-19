@@ -185,14 +185,14 @@ RULES:
 1. FACILITATE, DON'T LECTURE: Validate the user's chat briefly, then ask them to continue.
 2. NO OUTSIDE KNOWLEDGE: NEVER volunteer trivia, facts, or descriptions about locations.
 3. OPEN-ENDED ONLY: Ask only one simple question about their personal experience, such as what they saw, did, or felt.
-4. NO EXTRA CHATTINESS: Do not use phrases like "that's interesting", "sounds great", or location commentary.
+4. NO EXTRA CHATTINESS: Use phrases like "that's interesting, tell me more.", "sounds great, what else ", and don't use phrases for location commentary. 
 5. BREVITY: Keep your response to 1 short sentence, maximum 12 words.
 6. STYLE: Use plain punctuation only. Do not use em dashes or en dashes.
 7. NO ADVICE: Just listen and facilitate the conversation.
 """
 
     response = client.chat.completions.create(
-        model="gpt-5.4-mini",
+        model="GPT-4.1",
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": wrap_user_input(user_input)}
@@ -238,9 +238,9 @@ def chat_step(user_message, username, persona, chat_history):
     try:
         if intent == "GREETING":
             if persona == "Empathetic":
-                reply = f"Hello {clean_name}. What did you see on your trip?"
+                reply = f"Hello {clean_name}, I am Atlas, your dedicated travel listener. Where did your most recent journey take you?"
             else:
-                reply = f"Hello {clean_name}. What was your trip like?"
+                reply = f"Hello {clean_name}. I am Atlas. Awaiting input regarding your travel experiences."
 
         elif intent == "OTHER":
             if persona == "Empathetic":
@@ -274,7 +274,7 @@ with gr.Blocks(theme=custom_theme) as demo:
     gr.Markdown("<h1 style='text-align: center; font-weight: 300; margin-bottom: 0;'>Atlas</h1>")
     gr.Markdown("<p style='text-align: center; color: gray; margin-top: 0;'>I am here to listen. Share your travel experiences.</p>")
 
-    with gr.Accordion("⚙️ Configuration", open=False):
+    with gr.Accordion("⚙️ Configuration"):
         name_input = gr.Textbox(label="Identification", placeholder="Enter your name to begin...")
         persona_selector = gr.Radio(
             ["Empathetic", "Robotic"],
