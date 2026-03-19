@@ -42,7 +42,7 @@ def log_interaction(username, role, content, intent=None):
 def verify_travel_topic(user_input, chat_history):
     context_str = "No prior context."
     if chat_history:
-        recent_msgs = chat_history[-7:] # Expanded to 7 messages
+        recent_msgs = chat_history[-7:]
         context_str = "\n".join(
             [f"{msg['role'].capitalize()}: {msg['content']}" for msg in recent_msgs]
         )
@@ -56,8 +56,23 @@ Do not add punctuation. Do not add explanations. Do not use markdown.
 HIERARCHY & RULES:
 1. TRAVEL OVERRIDES GREETINGS: If the user says "Hi" but also mentions a location, a trip, or travel plans, you MUST classify it as TRAVEL.
 2. GREETING: ONLY use this if the input is *just* a basic hello with NO other information.
-3. TRAVEL: Use this if the user mentions any place, vacation, OR if they are answering the assistant's previous travel question. Single words or fragments (e.g., "The sun", "Beach", "Food") MUST be classified as TRAVEL if the context shows they are discussing a trip.
+3. TRAVEL: Use this if the user mentions any place, vacation. CRITICAL: If the user is directly answering the assistant's previous question in the Context, it is ALWAYS TRAVEL, no matter how short or random the word seems (e.g., "sticky", "yes", "good", "the sun").
 4. OTHER: Use this if the input is completely unrelated to travel (e.g., asking for code, math, or random facts).
+
+EXAMPLES:
+User Input: "Hi I went to Miami"
+Output: TRAVEL
+
+Context: Assistant: "What did your sun tan feel like?"
+User Input: "Sticky"
+Output: TRAVEL
+
+Context: Assistant: "Did you like the food?"
+User Input: "Yes"
+Output: TRAVEL
+
+User Input: "Can you write some code?"
+Output: OTHER
 
 Context:
 {context_str}
@@ -89,13 +104,13 @@ Context:
 def generate_facilitator_response(user_input, persona, username, chat_history):
     context_str = "No prior context."
     if chat_history:
-        recent_msgs = chat_history[-7:] # Expanded to 7 messages
+        recent_msgs = chat_history[-7:]
         context_str = "\n".join(
             [f"{msg['role'].capitalize()}: {msg['content']}" for msg in recent_msgs]
         )
 
     if persona == "Empathetic":
-        tone = "You are a warm, curious listener. Speak naturally."
+        tone = "You are a warm, reflective, and conversational listener."
     else:
         tone = "You are a neutral, monotone listener."
 
@@ -108,12 +123,10 @@ Recent Conversation Context:
 {context_str}
 
 RULES:
-1. BE CONTEXT AWARE: Look at the context. Do not ask questions the user has already answered. Connect your new question to the specific details they just provided.
-2. OPEN-ENDED ONLY: Ask short, open-ended questions. NEVER suggest answers, multiple choices, or guess what they did (e.g., NEVER say "Did you do X or Y?" or "Was it A or B?"). Let the user provide the details.
-3. ONE SENTENCE ONLY: Maximum 15 words.
-4. NO FILLER: Do not say "That sounds great" or "I see."
-5. NO PARROTING: Do not just repeat what they said.
-6. NO ADVICE OR FACTS: Just ask the next question to keep them talking about their experience.
+1. CONVERSATIONAL FLOW: Be a good listener, not an interrogator. You may briefly and naturally acknowledge what they just said before asking them to continue (e.g., "Sticky weather can be intense!"). 
+2. OPEN-ENDED ONLY: Never suggest answers, multiple choices, or guess what they did. Ask simple, open-ended questions like "What did you do next?" or "How did you handle that?"
+3. BREVITY: Keep your responses to 1 or 2 short sentences (Maximum 20 words).
+4. NO ADVICE OR FACTS: Just listen, validate their experience lightly, and encourage them to share more.
 """
 
     response = client.chat.completions.create(
