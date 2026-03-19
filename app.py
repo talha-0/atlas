@@ -83,7 +83,13 @@ def generate_facilitator_response(user_input, persona):
 # --- Gradio UI & Routing ---
 def chat_step(user_message, persona, chat_history):
     if not user_message.strip():
-        return chat_history, ""
+        # Rebuild UI state safely if empty input
+        ui_history = []
+        for i in range(0, len(chat_history), 2):
+            u_msg = chat_history[i]["content"]
+            a_msg = chat_history[i+1]["content"] if i + 1 < len(chat_history) else None
+            ui_history.append([u_msg, a_msg])
+        return ui_history, chat_history, ""
     
     history = chat_history or []
     history.append({"role": "user", "content": user_message})
@@ -100,14 +106,21 @@ def chat_step(user_message, persona, chat_history):
         history.append({"role": "assistant", "content": response})
         log_interaction("assistant", response)
 
-    return history, ""
+    # Reconstruct the UI tuple format from the pristine internal state
+    ui_history = []
+    for i in range(0, len(history), 2):
+        u_msg = history[i]["content"]
+        a_msg = history[i+1]["content"] if i + 1 < len(history) else None
+        ui_history.append([u_msg, a_msg])
 
-with gr.Blocks(theme=gr.themes.Monochrome()) as demo:
+    return ui_history, history, ""
+
+with gr.Blocks() as demo:
     gr.Markdown("# The Listening Terminal")
     gr.Markdown("Share your travel experiences. We only listen.")
     
     persona_selector = gr.Radio(["Empathetic", "Robotic"], label="Select Listener Persona", value="Empathetic")
-    chatbot = gr.Chatbot(type="messages", height=500)
+    chatbot = gr.Chatbot(height=500)
     
     with gr.Row():
         msg = gr.Textbox(placeholder="I visited Hong Kong last week...", show_label=False, scale=8)
@@ -115,10 +128,11 @@ with gr.Blocks(theme=gr.themes.Monochrome()) as demo:
         
     clear = gr.Button("Wipe Memory")
     
+    # Internal state holds the dicts, Chatbot holds the visual tuples
     state_history = gr.State([])
 
-    send.click(chat_step, inputs=[msg, persona_selector, state_history], outputs=[chatbot, msg])
-    msg.submit(chat_step, inputs=[msg, persona_selector, state_history], outputs=[chatbot, msg])
+    send.click(chat_step, inputs=[msg, persona_selector, state_history], outputs=[chatbot, state_history, msg])
+    msg.submit(chat_step, inputs=[msg, persona_selector, state_history], outputs=[chatbot, state_history, msg])
     
     clear.click(lambda: ([], []), None, [chatbot, state_history])
 
