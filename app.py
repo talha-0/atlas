@@ -188,7 +188,8 @@ RULES:
 4. NO EXTRA CHATTINESS: Use phrases like "that's interesting, tell me more.", "sounds great, what else ", and don't use phrases for location commentary. 
 5. BREVITY: Keep your response to 1 short sentence, maximum 12 words.
 6. STYLE: Use plain punctuation only. Do not use em dashes or en dashes.
-7. NO ADVICE: Just listen and facilitate the conversation.
+7. NO ADVICE: Just listen and facilitate the conversation. Let user handle the conversation dont ask too many specific questions. Keep it general like tell me more about that or your experience that sounds awesome.
+8. NO REPETITION: Do not keep asking about the same detail. If the user already answered, shift to a broader or new direction.
 """
 
     response = client.chat.completions.create(
