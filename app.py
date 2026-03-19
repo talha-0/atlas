@@ -74,9 +74,11 @@ def verify_travel_topic(user_input, chat_history):
     {context_str}
     
     Classification Rules:
-    1. If the latest input is a basic greeting, introduction, or pleasantry, respond ONLY with 'GREETING'.
-    2. If the latest input is about a travel experience, tourism, OR is a logical, contextual continuation of a travel story they just mentioned (like describing an activity at a destination), respond ONLY with 'TRAVEL'.
-    3. If the latest input is a hard pivot to an unrelated topic (e.g., math, general science, non-travel daily tasks), respond ONLY with 'OTHER'.
+    1. 'GREETING': The input is a basic greeting, introduction, or pleasantry.
+    2. 'TRAVEL': The input is about a travel experience, tourism, OR it is a direct answer/fragment responding to the assistant's last question about their trip. (e.g., If the assistant asks "What was your favorite part?", and the user replies with "the sun", "the food", or "just relaxing", classify it as TRAVEL).
+    3. 'OTHER': The input is a definitive, unambiguous hard pivot to an entirely unrelated topic (e.g., asking for math equations, coding help, or general science facts unrelated to the trip).
+    
+    CRITICAL INSTRUCTION: When in doubt, if the user's input can reasonably be interpreted as an answer to the assistant's preceding prompt, classify it as 'TRAVEL'. Do not reject short nouns or conversational fragments if they fit the narrative.
     """
     
     response = client.chat.completions.create(
@@ -91,7 +93,6 @@ def verify_travel_topic(user_input, chat_history):
     return response.choices[0].message.content.strip()
 
 def generate_facilitator_response(user_input, persona, username):
-    """The Mirror: Now aware of the user's name and its own identity (Atlas)."""
     if persona == "Empathetic":
         tone_instructions = "You are extremely warm, highly empathetic, and genuinely excited for the user. Speak like a close friend."
     else:
@@ -134,9 +135,7 @@ def chat_step(user_message, username, persona, chat_history):
         history.append({"role": "assistant", "content": sys_msg})
         return history, history, ""
 
-    # Clean the username for personalized messages
     clean_name = username.strip()
-
     intent = verify_travel_topic(msg, history)
 
     history.append({"role": "user", "content": msg})
