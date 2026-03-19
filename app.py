@@ -38,7 +38,6 @@ def log_interaction(username, role, content, intent=None):
             f.write(json.dumps(payload) + "\n")
 
 def flag_last_interaction(username, chat_history):
-    """The Surveillance Camera: Logs a manual flag to the dataset."""
     if not username.strip():
         raise gr.Error("Identity required to submit a flag.")
         
@@ -62,13 +61,27 @@ def flag_last_interaction(username, chat_history):
     gr.Info("Misclassification flagged and permanently logged to the vault.")
 
 # --- Agent Logic ---
-def verify_travel_topic(user_input):
-    system_prompt = """
-    You are a strict classification system. Analyze the user input.
-    1. If it is a basic greeting, introduction, or pleasantry (e.g., "hi", "hello", "how are you"), respond ONLY with 'GREETING'.
-    2. If it is about a travel experience, tourism, or visiting a place, respond ONLY with 'TRAVEL'.
-    3. If it is about ANY other topic, respond ONLY with 'OTHER'.
+def verify_travel_topic(user_input, chat_history):
+    """The Bouncer: Now possesses a localized memory buffer to understand context."""
+    
+    # Extract the last 4 messages to establish narrative context
+    context_str = "No prior context."
+    if chat_history:
+        recent_msgs = chat_history[-4:]
+        context_str = "\n".join([f"{msg['role'].capitalize()}: {msg['content']}" for msg in recent_msgs])
+
+    system_prompt = f"""
+    You are a strict classification system with short-term memory. Analyze the user's latest input within the context of the conversation.
+    
+    Recent Conversation Context:
+    {context_str}
+    
+    Classification Rules:
+    1. If the latest input is a basic greeting, introduction, or pleasantry, respond ONLY with 'GREETING'.
+    2. If the latest input is about a travel experience, tourism, OR is a logical, contextual continuation of a travel story they just mentioned (like describing an activity at a destination), respond ONLY with 'TRAVEL'.
+    3. If the latest input is a hard pivot to an unrelated topic (e.g., math, general science, non-travel daily tasks), respond ONLY with 'OTHER'.
     """
+    
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
@@ -81,21 +94,26 @@ def verify_travel_topic(user_input):
     return response.choices[0].message.content.strip()
 
 def generate_facilitator_response(user_input, persona):
+    """The Mirror: Upgraded with Active Listening."""
     if persona == "Empathetic":
-        tone_instructions = "You are extremely warm, empathetic, and excited for the user."
+        tone_instructions = "You are extremely warm, highly empathetic, and genuinely excited for the user. Speak like a close friend."
     else:
-        tone_instructions = "You are completely robotic, neutral, and monotone."
+        tone_instructions = "You are completely robotic, neutral, and monotone. Speak like a data processor."
 
     system_prompt = f"""
     {tone_instructions}
-    You are a listener. The user is sharing a travel experience.
+    You are a dedicated listener. The user is sharing a travel experience.
+    
     YOUR STRICT RULES:
-    1. You MUST NOT provide any information, facts, or tips.
-    2. You MUST NOT change the topic.
-    3. You MUST ONLY endorse the user's message and encourage them to say more.
-    4. Keep it to one short sentence. 
-    Examples: "Tell me more.", "What did you see?", "That sounds interesting, please continue."
+    1. You MUST NOT provide any outside information, facts, recommendations, or tips.
+    2. You MUST NOT change the topic or talk about yourself.
+    3. ACTIVE LISTENING: You MUST explicitly mention a specific detail the user just shared to prove you are listening, and then encourage them to continue. 
+    4. Keep it concise (1 to 2 sentences max).
+    
+    Good Examples (Empathetic): "Tanning at South Beach sounds incredibly relaxing! What else did you do there?", "Miami is so vibrant. Tell me more about your trip!"
+    Good Examples (Robotic): "Destination Miami logged. Proceed with further details regarding South Beach.", "Tanning activity recorded. What occurred next?"
     """
+    
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
@@ -103,30 +121,33 @@ def generate_facilitator_response(user_input, persona):
             {"role": "user", "content": user_input}
         ],
         temperature=0.7,
-        max_tokens=20
+        max_tokens=40
     )
     return response.choices[0].message.content.strip()
 
 # --- Gradio UI & Routing ---
 def chat_step(username, user_message, persona, chat_history):
-    # CRITICAL FIX: Copy the list to break the memory reference. 
-    # This forces Svelte to recognize the state mutation and trigger autoscroll.
     history = chat_history.copy() if chat_history else []
     
     if not user_message.strip():
         return history, history, ""
 
-    history.append({"role": "user", "content": user_message})
-
-    if not username.strip():
+    # Check Bouncer BEFORE appending the new message to history so the LLM clearly sees what is past vs present
+    is_valid_identity = bool(username.strip())
+    
+    if not is_valid_identity:
+        history.append({"role": "user", "content": user_message})
         sys_msg = "Error: Identity required. Please enter your Traveler Identification in the box above before speaking."
         history.append({"role": "assistant", "content": sys_msg})
         return history, history, ""
 
-    log_interaction(username, "user", user_message)
-
     try:
-        intent = verify_travel_topic(user_message)
+        # Pass the current history for context
+        intent = verify_travel_topic(user_message, history)
+
+        # Now append the user message
+        history.append({"role": "user", "content": user_message})
+        log_interaction(username, "user", user_message)
 
         if intent == "GREETING":
             sys_msg = "Hello. I am here to listen. Tell me about your travels."
@@ -144,6 +165,7 @@ def chat_step(username, user_message, persona, chat_history):
             log_interaction(username, "assistant", response, intent="TRAVEL")
             
     except Exception as e:
+        history.append({"role": "user", "content": user_message})
         err_msg = f"System fault: The connection to the cognitive engine failed. Please try again. ({str(e)})"
         history.append({"role": "assistant", "content": err_msg})
 
@@ -157,7 +179,6 @@ with gr.Blocks() as demo:
         name_input = gr.Textbox(label="Traveler Identification", placeholder="Who are you?", scale=1)
         persona_selector = gr.Radio(["Empathetic", "Robotic"], label="Select Listener Persona", value="Empathetic", scale=2)
     
-    # CRITICAL FIX: Explicitly enforce autoscroll
     chatbot = gr.Chatbot(height=500, autoscroll=True)
     
     with gr.Row():
@@ -170,10 +191,10 @@ with gr.Blocks() as demo:
     
     state_history = gr.State([])
 
-    # CRITICAL FIX: Add scroll_to_output=True to force browser snapping
     send.click(chat_step, inputs=[name_input, msg, persona_selector, state_history], outputs=[chatbot, state_history, msg], scroll_to_output=True)
     msg.submit(chat_step, inputs=[name_input, msg, persona_selector, state_history], outputs=[chatbot, state_history, msg], scroll_to_output=True)
     
+    flag_btn.click(flag_last_interaction, inputs=[name_input, state_history], outputs=[])
     clear.click(lambda: ([], []), None, [chatbot, state_history])
 
 if __name__ == "__main__":
