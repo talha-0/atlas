@@ -27,18 +27,3 @@ Powered by a highly constrained generation model (e.g., **GPT-4.1**). The Mirror
 * **Listen, Don't Lecture:** It is strictly forbidden from offering facts, trivia, or advice about locations. 
 * **Brevity:** Capped at 12-20 words per response to ensure the user speaks more than the AI.
 * **Open-Ended Facilitation:** Trained to avoid multiple-choice questions, instead using phrases like *"That's interesting, tell me more"* to prompt deeper storytelling.
----
-
----
-title: Atlas
-emoji: 🌍
-colorFrom: gray
-colorTo: blue
-sdk: gradio
-sdk_version: 6.9.0
-app_file: app.py
-pinned: false
-short_description: A multi-agent chatbot that listens to travel experiences.
----
-
-Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
